@@ -50,7 +50,7 @@
 
     function connectWebSocket() {
       // Connects back directly to your local background Python process endpoint loop
-      socket = new WebSocket('ws://127.0.0.1:8080');
+      socket = new WebSocket('ws://127.0.0.1:9000/ws');
 
       const priceEl = document.getElementById("btc-price");
       const statusEl = document.getElementById("status");
