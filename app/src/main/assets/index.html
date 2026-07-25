@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobile Installer + Bot</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f0f0f; color: #fff; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; color: #4CAF50; }
+    .price-ticker { background: #1e1e1e; padding: 15px; border-radius: 12px; margin: 15px 0; text-align: center; }
+    .price { font-size: 28px; font-weight: bold; }
+    .up { color: #4CAF50; }
+    .down { color: #f44336; }
+    .app-card { background: #1e1e1e; margin: 15px 0; padding: 15px; border-radius: 12px; display: flex; align-items: center; }
+    .icon { width: 60px; height: 60px; background: #4CAF50; border-radius: 12px; margin-right: 15px; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+    button { background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    .status { color: #aaa; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 Installer + Live Bot</h1>
+    <p style="text-align:center">Connected via WebSocket Stream</p>
+
+    <div class="price-ticker" id="ticker">
+      <strong>BTC/USDT (via WebSocket)</strong><br>
+      <span id="btc-price" class="price">Connecting...</span><br>
+      <span id="status" class="status">Initializing socket stream...</span>
+    </div>
+
+    <div class="app-card">
+      <div class="icon">📦</div>
+      <div>
+        <h3>My App</h3>
+        <p>v1.2.3</p>
+        <button onclick="installApp(this)">Install</button>
+      </div>
+    </div>
+
+    <button onclick="document.getElementById('apkPicker').click()" style="width:100%; margin-top:20px; padding:15px;">
+      📤 Select APK File
+    </button>
+    <input type="file" id="apkPicker" accept=".apk" style="display:none" onchange="handleFile(this)">
+  </div>
+
+  <script>
+    let lastPrice = 0;
+    let socket;
+
+    function connectWebSocket() {
+      // Connects back directly to your local background Python process endpoint loop
+      socket = new WebSocket('ws://127.0.0.1:8080');
+
+      const priceEl = document.getElementById("btc-price");
+      const statusEl = document.getElementById("status");
+
+      socket.onopen = () => {
+        statusEl.textContent = "Live • Stream connected";
+        statusEl.style.color = "#4CAF50";
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const price = parseFloat(data.price || data.btc || 0).toFixed(2);
+          priceEl.textContent = "$" + price;
+
+          if (price > lastPrice) priceEl.className = "price up";
+          else if (price < lastPrice) priceEl.className = "price down";
+
+          lastPrice = price;
+        } catch (err) {
+          console.error("Data error:", err);
+        }
+      };
+
+      socket.onclose = () => {
+        statusEl.textContent = "Disconnected • Reconnecting in 5s...";
+        statusEl.style.color = "#f44336";
+        priceEl.textContent = "---";
+        setTimeout(connectWebSocket, 5000);
+      };
+
+      socket.onerror = () => {
+        statusEl.textContent = "Server down or unreachable";
+      };
+    }
+
+    function installApp(btn) {
+      btn.textContent = "Installing...";
+      setTimeout(() => {
+        btn.textContent = "✅ Installed";
+        alert("App installed!");
+      }, 1800);
+    }
+
+    function handleFile(input) {
+      if (input.files.length > 0) alert("Selected: " + input.files[0].name);
+    }
+
+    connectWebSocket();
+  </script>
+</body>
+</html>
+
