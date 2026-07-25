@@ -32,7 +32,10 @@
 
   .banner {
     margin: 14px; border-radius: 14px; padding: 22px 18px; position: relative; overflow: hidden;
-    background: linear-gradient(135deg, #0d1a14 0%, #0a0e0f 100%); border: 1px solid #1a2420;
+    background:
+      linear-gradient(135deg, rgba(13,26,20,0.92) 0%, rgba(10,14,15,0.96) 100%),
+      repeating-linear-gradient(100deg, #10221a 0 2px, transparent 2px 40px);
+    border: 1px solid #1a2420;
   }
   .banner .tag { color: #22c55e; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
   .banner h1 { margin: 0 0 6px; font-size: 24px; }
@@ -41,12 +44,18 @@
   .statusbar {
     margin: 0 14px 14px; background: #101513; border: 1px solid #1a2420; border-radius: 12px;
     padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; font-size: 12px;
+    position: relative;
   }
   .statusbar span.label { color: #6b7a74; margin-right: 6px; }
   .statusbar span.val { font-weight: 700; }
   .val.green { color: #22c55e; } .val.orange { color: #f59e0b; }
+  .wrench {
+    position: absolute; left: 12px; bottom: -22px; width: 44px; height: 44px; border-radius: 50%;
+    background: #6d5bd0; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4); z-index: 5;
+  }
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 14px 14px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 32px 14px 14px; }
   .stat-card {
     background: #101513; border: 1px solid #1a2420; border-radius: 12px; padding: 14px 6px;
     text-align: center;
@@ -62,17 +71,13 @@
 
   .price-list { padding: 0 14px 90px; display: flex; flex-direction: column; gap: 10px; }
   .price-card {
-    background: #101513; border: 1px solid #1a2420; border-radius: 12px; padding: 14px 16px;
+    background: #101513; border: 1px solid #1a2420; border-radius: 12px; padding: 14px 16px; cursor: pointer;
   }
   .price-top { display: flex; justify-content: space-between; align-items: flex-start; }
   .price-symbol { font-size: 15px; font-weight: 700; }
   .price-change { font-size: 12px; margin-top: 3px; }
   .price-change.up { color: #22c55e; } .price-change.down { color: #ef4444; }
   .price-value { font-size: 20px; font-weight: 800; text-align: right; }
-  .price-value.flash-up { animation: flashGreen 0.6s; }
-  .price-value.flash-down { animation: flashRed 0.6s; }
-  @keyframes flashGreen { 0% { color: #22c55e; } 100% { color: #e8e8e8; } }
-  @keyframes flashRed { 0% { color: #ef4444; } 100% { color: #e8e8e8; } }
   .price-bottom {
     display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px;
     border-top: 1px solid #1a2420; font-size: 11px; color: #6b7a74;
@@ -89,13 +94,31 @@
   .signal-reasons { font-size: 11px; color: #9ba8a2; margin-top: 8px; line-height: 1.6; }
   .empty-state { text-align: center; padding: 40px 20px; color: #4a5750; font-size: 13px; }
 
+  .chart-symbol-picker {
+    display: flex; gap: 8px; overflow-x: auto; padding: 0 14px 14px; -webkit-overflow-scrolling: touch;
+  }
+  .chip {
+    flex-shrink: 0; padding: 8px 14px; background: #101513; border: 1px solid #1a2420; border-radius: 20px;
+    font-size: 12px; color: #8b9a94; white-space: nowrap;
+  }
+  .chip.active { background: #10221a; color: #22c55e; border-color: #22c55e; }
+  .chart-wrap { margin: 0 14px 20px; background: #101513; border: 1px solid #1a2420; border-radius: 12px; padding: 12px; }
+  canvas#chartCanvas { width: 100%; height: 320px; display: block; }
+  .chart-price-row { display: flex; justify-content: space-between; padding: 0 14px 90px; font-size: 12px; color: #6b7a74; }
+
+  .settings-list { padding: 0 14px 90px; }
+  .settings-item {
+    background: #101513; border: 1px solid #1a2420; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+  }
+  .settings-item .lbl { color: #8b9a94; }
+  .settings-item .val { font-weight: 700; }
+
   .tabbar {
     position: fixed; bottom: 0; left: 0; right: 0; background: #0d1210; border-top: 1px solid #1a2420;
     display: flex; padding: 8px 0 12px;
   }
-  .tab {
-    flex: 1; text-align: center; color: #6b7a74; font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
-  }
+  .tab { flex: 1; text-align: center; color: #6b7a74; font-size: 10px; font-weight: 600; }
   .tab .tab-icon { font-size: 18px; margin-bottom: 3px; }
   .tab.active { color: #22c55e; }
 
@@ -120,9 +143,12 @@
 
   <div class="statusbar">
     <div><span class="label">STATUS</span><span class="val" id="connVal">Connecting</span></div>
+    <div><span class="label">MODE</span><span class="val green">WS</span></div>
+    <div><span class="label">LATENCY</span><span class="val" id="latVal">--ms</span></div>
     <div><span class="label">PAIRS</span><span class="val" id="pairsVal">0</span></div>
     <div><span class="label">SIGNALS</span><span class="val green" id="sigVal">0</span></div>
     <div><span class="label">UPTIME</span><span class="val" id="uptimeVal">00:00:00</span></div>
+    <div class="wrench" onclick="switchView('settingsView')">🔧</div>
   </div>
 
   <div class="stats">
@@ -134,28 +160,50 @@
 
   <div id="dashboardView" class="view active">
     <div class="section-title">LIVE PRICES</div>
-    <div class="price-list" id="priceList">
-      <div class="empty-state">Waiting for ticks...</div>
-    </div>
+    <div class="price-list" id="priceList"><div class="empty-state">Waiting for ticks...</div></div>
   </div>
 
   <div id="signalsView" class="view">
     <div class="section-title">SIGNAL FEED</div>
-    <div class="price-list" id="signalList">
-      <div class="empty-state">No signals yet — building candles...</div>
+    <div class="price-list" id="signalList"><div class="empty-state">No signals yet — building candles...</div></div>
+  </div>
+
+  <div id="chartsView" class="view">
+    <div class="section-title">SELECT PAIR</div>
+    <div class="chart-symbol-picker" id="symbolPicker"></div>
+    <div class="chart-wrap"><canvas id="chartCanvas"></canvas></div>
+    <div class="chart-price-row">
+      <span>O: <span id="cOpen">--</span></span>
+      <span>H: <span id="cHigh">--</span></span>
+      <span>L: <span id="cLow">--</span></span>
+      <span>C: <span id="cClose">--</span></span>
+    </div>
+  </div>
+
+  <div id="settingsView" class="view">
+    <div class="section-title">SETTINGS</div>
+    <div class="settings-list">
+      <div class="settings-item"><span class="lbl">Server</span><span class="val">127.0.0.1:9000</span></div>
+      <div class="settings-item"><span class="lbl">Stream</span><span class="val">WebSocket (/ws)</span></div>
+      <div class="settings-item"><span class="lbl">Candle interval</span><span class="val">1 min</span></div>
+      <div class="settings-item"><span class="lbl">App version</span><span class="val">1.2.3</span></div>
     </div>
   </div>
 
   <div class="tabbar">
     <div class="tab active" data-view="dashboardView"><div class="tab-icon">▦</div>Dashboard</div>
     <div class="tab" data-view="signalsView"><div class="tab-icon">⚡</div>Signals</div>
+    <div class="tab" data-view="chartsView"><div class="tab-icon">📈</div>Charts</div>
+    <div class="tab" data-view="settingsView"><div class="tab-icon">⚙</div>Settings</div>
   </div>
 
 <script>
+const SERVER = 'http://127.0.0.1:9000';
 let socket;
 let startTime = Date.now();
 let signalCount = 0;
-const prices = {};   // symbol -> { price, lastPrice, changePct }
+const prices = {};       // symbol -> {price, changePct, tickCount}
+let selectedSymbol = null;
 
 function connectWebSocket() {
   socket = new WebSocket('ws://127.0.0.1:9000/ws');
@@ -170,11 +218,8 @@ function connectWebSocket() {
   socket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.type === 'signal') {
-        handleSignal(data);
-      } else if (data.symbol && data.price) {
-        handleTick(data);
-      }
+      if (data.type === 'signal') { handleSignal(data); }
+      else if (data.symbol && data.price) { handleTick(data); }
     } catch (err) { console.error(err); }
   };
 
@@ -194,10 +239,18 @@ function handleTick(data) {
   const price = parseFloat(data.price);
   const prev = prices[sym];
   const changePct = prev ? ((price - prev.price) / prev.price * 100) : 0;
+  const tickCount = prev ? prev.tickCount + 1 : 1;
 
-  prices[sym] = { price, lastPrice: prev ? prev.price : price, changePct };
+  prices[sym] = { price, changePct, tickCount };
+
+  if (data.ts) {
+    const latency = Math.max(0, Math.round((Date.now()/1000 - data.ts) * 1000));
+    document.getElementById('latVal').textContent = latency + 'ms';
+  }
+
   renderPrices();
   updateStats();
+  renderSymbolChips();
 }
 
 function handleSignal(sig) {
@@ -228,8 +281,12 @@ function renderPrices() {
   syms.forEach(sym => {
     const p = prices[sym];
     const up = p.changePct >= 0;
+    const spread = p.price * 0.00003;
+    const bid = (p.price - spread/2).toFixed(5);
+    const ask = (p.price + spread/2).toFixed(5);
     const card = document.createElement('div');
     card.className = 'price-card';
+    card.onclick = () => { selectedSymbol = sym; switchView('chartsView'); loadChart(sym); };
     card.innerHTML = `
       <div class="price-top">
         <div>
@@ -237,6 +294,9 @@ function renderPrices() {
           <div class="price-change ${up ? 'up' : 'down'}">${up ? '↑' : '↓'} ${p.changePct.toFixed(3)}%</div>
         </div>
         <div class="price-value">${p.price.toFixed(5)}</div>
+      </div>
+      <div class="price-bottom">
+        <span>BID ${bid}</span><span>ASK ${ask}</span><span>VOL ${p.tickCount}</span>
       </div>
     `;
     list.appendChild(card);
@@ -247,10 +307,8 @@ function updateStats() {
   const syms = Object.keys(prices);
   document.getElementById('pairsVal').textContent = syms.length;
   document.getElementById('activeCount').textContent = syms.length;
-  const gainers = syms.filter(s => prices[s].changePct > 0).length;
-  const losers = syms.filter(s => prices[s].changePct < 0).length;
-  document.getElementById('gainersCount').textContent = gainers;
-  document.getElementById('losersCount').textContent = losers;
+  document.getElementById('gainersCount').textContent = syms.filter(s => prices[s].changePct > 0).length;
+  document.getElementById('losersCount').textContent = syms.filter(s => prices[s].changePct < 0).length;
 }
 
 function updateUptime() {
@@ -262,14 +320,86 @@ function updateUptime() {
 }
 setInterval(updateUptime, 1000);
 
+function switchView(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === id));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === id));
+}
 document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(tab.dataset.view).classList.add('active');
-  });
+  tab.addEventListener('click', () => switchView(tab.dataset.view));
 });
+
+// ===== Charts =====
+function renderSymbolChips() {
+  const picker = document.getElementById('symbolPicker');
+  const syms = Object.keys(prices);
+  const existing = new Set([...picker.children].map(c => c.dataset.sym));
+  syms.forEach(sym => {
+    if (existing.has(sym)) return;
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.dataset.sym = sym;
+    chip.textContent = sym;
+    chip.onclick = () => { selectedSymbol = sym; loadChart(sym); highlightChip(sym); };
+    picker.appendChild(chip);
+    if (!selectedSymbol) { selectedSymbol = sym; loadChart(sym); highlightChip(sym); }
+  });
+}
+function highlightChip(sym) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.sym === sym));
+}
+
+async function loadChart(sym) {
+  try {
+    const res = await fetch(`${SERVER}/candles/${sym.replace(/\//g, '-')}`);
+    const candles = await res.json();
+    drawCandles(candles);
+  } catch (err) { console.error('Chart fetch failed', err); }
+}
+
+function drawCandles(candles) {
+  const canvas = document.getElementById('chartCanvas');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = 320;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  if (!candles || candles.length === 0) {
+    ctx.fillStyle = '#4a5750'; ctx.font = '13px sans-serif';
+    ctx.fillText('Not enough candle data yet...', 14, h/2);
+    return;
+  }
+
+  const last = candles[candles.length - 1];
+  document.getElementById('cOpen').textContent = last.open.toFixed(5);
+  document.getElementById('cHigh').textContent = last.high.toFixed(5);
+  document.getElementById('cLow').textContent = last.low.toFixed(5);
+  document.getElementById('cClose').textContent = last.close.toFixed(5);
+
+  const highs = candles.map(c => c.high), lows = candles.map(c => c.low);
+  const max = Math.max(...highs), min = Math.min(...lows);
+  const range = (max - min) || 1;
+  const padding = 10;
+  const chartH = h - padding*2;
+  const cw = w / candles.length;
+
+  candles.forEach((c, i) => {
+    const x = i * cw + cw/2;
+    const yOpen = padding + chartH - ((c.open - min)/range) * chartH;
+    const yClose = padding + chartH - ((c.close - min)/range) * chartH;
+    const yHigh = padding + chartH - ((c.high - min)/range) * chartH;
+    const yLow = padding + chartH - ((c.low - min)/range) * chartH;
+    const up = c.close >= c.open;
+    ctx.strokeStyle = up ? '#22c55e' : '#ef4444';
+    ctx.fillStyle = up ? '#22c55e' : '#ef4444';
+    ctx.beginPath(); ctx.moveTo(x, yHigh); ctx.lineTo(x, yLow); ctx.stroke();
+    const bodyTop = Math.min(yOpen, yClose), bodyH = Math.max(1, Math.abs(yClose - yOpen));
+    ctx.fillRect(x - cw*0.3, bodyTop, cw*0.6, bodyH);
+  });
+}
+
+setInterval(() => { if (selectedSymbol) loadChart(selectedSymbol); }, 5000);
 
 connectWebSocket();
 </script>
