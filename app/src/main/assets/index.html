@@ -234,6 +234,207 @@ function connectWebSocket() {
   socket.onerror = () => { socket.close(); };
 }
 
+
+// ============================================================
+// PERSISTENT DASHBOARD + LIVE CANDLE ENGINE
+// Additive layer: does not change signal-generation logic.
+// ============================================================
+
+const SIGNAL_STORAGE_KEY = 'incredible_bot_signal_history_v1';
+const CANDLE_STORAGE_KEY = 'incredible_bot_candle_history_v1';
+const MAX_STORED_SIGNALS = 500;
+const MAX_STORED_CANDLES = 300;
+const CANDLE_SECONDS = 60;
+
+let candleHistory = {};
+let restoringHistory = false;
+
+function safeNumber(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function loadPersistentHistory() {
+  try {
+    const savedSignals = JSON.parse(localStorage.getItem(SIGNAL_STORAGE_KEY) || '[]');
+    if (Array.isArray(savedSignals)) {
+      savedSignals.slice(0, MAX_STORED_SIGNALS).reverse().forEach(sig => {
+        renderStoredSignal(sig);
+      });
+      signalCount = savedSignals.length;
+      document.getElementById('sigVal').textContent = signalCount;
+      document.getElementById('signalsCount').textContent = signalCount;
+    }
+  } catch (e) {
+    console.warn('Signal history restore failed:', e);
+  }
+
+  try {
+    const savedCandles = JSON.parse(localStorage.getItem(CANDLE_STORAGE_KEY) || '{}');
+    if (savedCandles && typeof savedCandles === 'object') {
+      candleHistory = savedCandles;
+    }
+  } catch (e) {
+    console.warn('Candle history restore failed:', e);
+    candleHistory = {};
+  }
+}
+
+function saveSignal(sig) {
+  try {
+    let history = JSON.parse(localStorage.getItem(SIGNAL_STORAGE_KEY) || '[]');
+    if (!Array.isArray(history)) history = [];
+
+    const item = Object.assign({}, sig, {
+      _savedAt: Date.now()
+    });
+
+    history.unshift(item);
+    history = history.slice(0, MAX_STORED_SIGNALS);
+    localStorage.setItem(SIGNAL_STORAGE_KEY, JSON.stringify(history));
+  } catch (e) {
+    console.warn('Signal save failed:', e);
+  }
+}
+
+function renderStoredSignal(sig) {
+  const list = document.getElementById('signalList');
+  const empty = list.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const dir = sig.direction || sig.otc_direction || 'UNKNOWN';
+  const dirClass = dir === 'BUY' || dir === 'CALL' ? 'buy' : 'sell';
+
+  const card = document.createElement('div');
+  card.className = 'signal-card ' + (dirClass === 'sell' ? 'sell' : '');
+
+  const price = safeNumber(sig.price);
+  const priceText = price !== null ? price.toFixed(5) : '--';
+
+  card.innerHTML = `
+    <div class="signal-dir ${dirClass}">
+      ${sig.otc_direction || sig.direction || '--'} • ${sig.symbol || '--'}
+    </div>
+    <div class="signal-meta">
+      Strength ${sig.strength ?? '--'}% •
+      Confidence ${sig.confidence ?? '--'}% •
+      $${priceText}
+    </div>
+    <div class="signal-reasons">
+      ${(sig.reasons || []).slice(0,4).join(' • ')}
+    </div>
+  `;
+
+  list.appendChild(card);
+}
+
+function saveCandleHistory() {
+  try {
+    const trimmed = {};
+
+    Object.keys(candleHistory).forEach(sym => {
+      trimmed[sym] = (candleHistory[sym] || []).slice(-MAX_STORED_CANDLES);
+    });
+
+    localStorage.setItem(CANDLE_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch (e) {
+    console.warn('Candle save failed:', e);
+  }
+}
+
+function getTickTime(data) {
+  const raw = safeNumber(data.ts ?? data.timestamp ?? data.time);
+  if (raw !== null) {
+    return raw > 100000000000 ? Math.floor(raw / 1000) : Math.floor(raw);
+  }
+  return Math.floor(Date.now() / 1000);
+}
+
+function updateLiveCandle(data) {
+  const sym = data.symbol;
+  const price = safeNumber(data.price);
+  if (!sym || price === null) return;
+
+  const ts = getTickTime(data);
+  const bucket = Math.floor(ts / CANDLE_SECONDS) * CANDLE_SECONDS;
+
+  if (!candleHistory[sym]) candleHistory[sym] = [];
+
+  let candles = candleHistory[sym];
+  let last = candles[candles.length - 1];
+
+  // Start a new candle when the minute changes.
+  if (!last || Number(last.time) !== bucket) {
+    last = {
+      time: bucket,
+      timestamp: bucket,
+      open: price,
+      high: price,
+      low: price,
+      close: price
+    };
+    candles.push(last);
+  } else {
+    last.high = Math.max(Number(last.high), price);
+    last.low = Math.min(Number(last.low), price);
+    last.close = price;
+  }
+
+  // Keep only the most recent candles.
+  if (candles.length > MAX_STORED_CANDLES) {
+    candleHistory[sym] = candles.slice(-MAX_STORED_CANDLES);
+  }
+
+  saveCandleHistory();
+
+  if (selectedSymbol === sym) {
+    drawCandles(candleHistory[sym]);
+  }
+}
+
+function getLocalCandles(sym) {
+  return Array.isArray(candleHistory[sym])
+    ? candleHistory[sym]
+    : [];
+}
+
+function mergeCandles(serverCandles, localCandles) {
+  const map = new Map();
+
+  [...(serverCandles || []), ...(localCandles || [])].forEach(c => {
+    if (!c) return;
+
+    const time = safeNumber(c.time ?? c.timestamp ?? c.ts);
+
+    if (time === null) return;
+
+    const item = {
+      time: time > 100000000000 ? Math.floor(time / 1000) : Math.floor(time),
+      timestamp: time > 100000000000 ? Math.floor(time / 1000) : Math.floor(time),
+      open: safeNumber(c.open),
+      high: safeNumber(c.high),
+      low: safeNumber(c.low),
+      close: safeNumber(c.close)
+    };
+
+    if (
+      item.open !== null &&
+      item.high !== null &&
+      item.low !== null &&
+      item.close !== null
+    ) {
+      map.set(item.time, item);
+    }
+  });
+
+  return Array.from(map.values())
+    .sort((a,b) => a.time - b.time)
+    .slice(-MAX_STORED_CANDLES);
+}
+
+// Restore signals/candles immediately after page loads.
+loadPersistentHistory();
+
 function handleTick(data) {
   const sym = data.symbol;
   const price = parseFloat(data.price);
@@ -242,6 +443,9 @@ function handleTick(data) {
   const tickCount = prev ? prev.tickCount + 1 : 1;
 
   prices[sym] = { price, changePct, tickCount };
+
+  // Build/update the live 1-minute OHLC candle from this tick.
+  updateLiveCandle(data);
 
   if (data.ts) {
     const latency = Math.max(0, Math.round((Date.now()/1000 - data.ts) * 1000));
@@ -271,6 +475,9 @@ function handleSignal(sig) {
     <div class="signal-reasons">${(sig.reasons || []).slice(0,4).join(' • ')}</div>
   `;
   list.prepend(card);
+
+  // Persist the signal so refresh/reopen does not wipe history.
+  saveSignal(sig);
 }
 
 function renderPrices() {
@@ -349,11 +556,36 @@ function highlightChip(sym) {
 }
 
 async function loadChart(sym) {
+  selectedSymbol = sym;
+  highlightChip(sym);
+
+  const local = getLocalCandles(sym);
+
+  // Immediately show locally stored candles.
+  if (local.length) {
+    drawCandles(local);
+  }
+
+  // Then ask the bot for its latest candle history.
   try {
     const res = await fetch(`${SERVER}/candles/${sym.replace(/\//g, '-')}`);
-    const candles = await res.json();
-    drawCandles(candles);
-  } catch (err) { console.error('Chart fetch failed', err); }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const serverCandles = await res.json();
+    const merged = mergeCandles(serverCandles, local);
+
+    if (merged.length) {
+      candleHistory[sym] = merged;
+      saveCandleHistory();
+      drawCandles(merged);
+    }
+  } catch (err) {
+    console.warn('Chart fetch failed; using local candle history:', err);
+
+    if (getLocalCandles(sym).length) {
+      drawCandles(getLocalCandles(sym));
+    }
+  }
 }
 
 function drawCandles(candles) {
@@ -399,7 +631,16 @@ function drawCandles(candles) {
   });
 }
 
-setInterval(() => { if (selectedSymbol) loadChart(selectedSymbol); }, 5000);
+setInterval(() => {
+  if (selectedSymbol) loadChart(selectedSymbol);
+}, 5000);
+
+// Redraw the selected candle chart when the app/window size changes.
+window.addEventListener('resize', () => {
+  if (selectedSymbol && getLocalCandles(selectedSymbol).length) {
+    drawCandles(getLocalCandles(selectedSymbol));
+  }
+});
 
 connectWebSocket();
 </script>
